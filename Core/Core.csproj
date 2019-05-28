@@ -60,6 +60,12 @@
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <PropertyGroup>
+    <PreBuildEvent>$(SolutionDir)CodeGen\$(OutDir)CodeGen.exe $(ProjectPath)</PreBuildEvent>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PostBuildEvent></PostBuildEvent>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="Generated\Defs\MainDef.cs" />
     <Compile Include="Generated\Defs\SideADef.cs" />
