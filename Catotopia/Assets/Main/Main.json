@@ -1,0 +1,14 @@
+﻿{
+  "$type": "Catotopia.Defs.MainDef",
+  "intField": 5,
+  "stringProp1": "blablabla",
+  "stringProp_2": "blablabla2",
+  "sides": [
+    {
+      "$type": "Catotopia.Defs.SideADef",
+      "stringField": "Side A Inner"
+    },
+    "Side/SideA",
+    "Side/SideB"
+  ]
+}
