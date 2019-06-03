@@ -1,0 +1,13 @@
+﻿{
+    "files.associations": {
+        "*.json": "jsonc"
+    },
+    "json.schemas": [
+        {
+            "fileMatch": [
+                "*.json"
+            ],
+            "url": "./json_schema.json"
+        }
+    ]
+}

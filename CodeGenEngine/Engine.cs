@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml.Linq;
 
 namespace CodeGenEngine
@@ -22,7 +23,10 @@ namespace CodeGenEngine
         #endregion
 
         const string _csprojNmsp = "http://schemas.microsoft.com/developer/msbuild/2003";
-        const string _generatedDirName = "Generated";
+        const string _generatedPath = "Generated";
+        const string _assetsPath = "Assets";
+        const string _schemaPath = "json_schema.json";
+        const string _vsCodeSettingsPath = ".vscode/settings.json";
         string[] _additionalDefUsings = new[]
         {
             "Newtonsoft.Json.Linq",
@@ -50,18 +54,21 @@ namespace CodeGenEngine
 
             var csproj = XDocument.Parse(File.ReadAllText(CsprojPath));
 
-            RemovePreviouslyGeneratedFilesFromProject(csproj);
+            //RemovePreviouslyGeneratedFilesFromProject(csproj);
             RemovePreviouslyGeneratedFilesFromDrive();
 
-            var generatedFiles = new List<string>();
+            var generatedFiles = new List<ProjectFile>();
 
             var defStructs = new List<DefStructure>(GetDefStructures(Path.Combine(RootPath, "Defs")));
 
             foreach (var def in defStructs)
-                CreateDefDeserializer(def, generatedFiles);
+                generatedFiles.Add(CreateDefDeserializer(def));
 
-            AddGeneratedFilesToProject(csproj, generatedFiles);
-            csproj.Save(CsprojPath);
+            generatedFiles.Add(CreateVSCodeSettings(defStructs));
+            generatedFiles.Add(CreateJsonSchema(defStructs));
+
+            if (AddGeneratedFilesToProject(csproj, generatedFiles))
+                csproj.Save(CsprojPath);
         }
 
         private IEnumerable<DefStructure> GetDefStructures(string defsPath)
@@ -98,10 +105,10 @@ namespace CodeGenEngine
             }
         }
 
-        private void CreateDefDeserializer(DefStructure def, List<string> generatedFiles)
+        private ProjectFile CreateDefDeserializer(DefStructure def)
         {
             if (def.Modifiers.Contains(SyntaxKind.AbstractKeyword))
-                return;
+                return default(ProjectFile);
 
             var statements = new List<StatementSyntax>();
             statements.Add(SyntaxFactory.ParseStatement("base.Fill(source,resources);"));
@@ -130,50 +137,39 @@ namespace CodeGenEngine
                 new SyntaxList<MemberDeclarationSyntax>(string.IsNullOrWhiteSpace(def.Namespace) ? (MemberDeclarationSyntax)classDeclaration :
                 SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(def.Namespace))/*.NormalizeWhitespace()*/.AddMembers(classDeclaration)));
 
-            var code = unit.NormalizeWhitespace().ToFullString();
+            var notification = string.Format(Properties.Resources.GeneratedNotification, GetType().Assembly.GetName().Version.ToString());
+            var code = $"{notification}\r\n{unit.NormalizeWhitespace().ToFullString()}";
 
             var filename = def.ClassName + ".cs";
-            var relativePath = Path.Combine(_generatedDirName, def.RelativePath, filename);
+            var relativePath = Path.Combine(_generatedPath, def.RelativePath, filename);
             var targetPath = Path.Combine(def.RootPath, relativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
             File.WriteAllText(targetPath, code);
 
-            generatedFiles.Add(relativePath);
+            return new ProjectFile(relativePath, ItemGroupLabel.Generated, BuildActionType.Compile);
         }
 
-        //private string CreateClassDeserializer(ClassDeclarationSyntax classmemb, NameSyntax nmspace, IEnumerable<UsingDirectiveSyntax> usings, string rootPath, string filepath)
-        //{
-        //    if (classmemb.Modifiers.Any(SyntaxKind.AbstractKeyword))
-        //        return null;
-        //    var classDeclaration = SyntaxFactory.ClassDeclaration(classmemb.Identifier)
-        //        .AddModifiers(classmemb.Modifiers.With(SyntaxFactory.Token(SyntaxKind.PartialKeyword)).ToArray());
+        private ProjectFile CreateVSCodeSettings(IEnumerable<DefStructure> defs)
+        {
+            var relativePath = Path.Combine(_assetsPath, _vsCodeSettingsPath);
+            var path = Path.Combine(RootPath, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
 
-        //    //var @namespace = SyntaxFactory.NamespaceDeclaration(nmspace)/*.NormalizeWhitespace()*/.AddMembers(classDeclaration);
+            File.WriteAllBytes(path, Properties.Resources.VSCodeSettings);
 
-        //    var unit = SyntaxFactory.CompilationUnit(
-        //        new SyntaxList<ExternAliasDirectiveSyntax>(),
-        //        new SyntaxList<UsingDirectiveSyntax>(usings),
-        //        new SyntaxList<AttributeListSyntax>(),
-        //        new SyntaxList<MemberDeclarationSyntax>(nmspace == null ? (MemberDeclarationSyntax)classDeclaration :
-        //        SyntaxFactory.NamespaceDeclaration(nmspace)/*.NormalizeWhitespace()*/.AddMembers(classDeclaration)));
+            return new ProjectFile(relativePath, ItemGroupLabel.VSCode, BuildActionType.None, true);
+        }
 
+        private ProjectFile CreateJsonSchema(IEnumerable<DefStructure> defs)
+        {
+            var relativePath = Path.Combine(_assetsPath, _schemaPath);
+            var path = Path.Combine(RootPath, relativePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
 
+            File.WriteAllBytes(path, Properties.Resources.VSCodeSettings);
 
-
-
-
-        //    var code = unit.NormalizeWhitespace().ToFullString();
-
-        //    var sourceDirectoryPath = Path.GetDirectoryName(filepath);
-        //    var sourceRelativeDirectoryPath = sourceDirectoryPath.Substring(rootPath.Length + 1);
-        //    var filename = classmemb.Identifier + ".cs";
-        //    var relativePath = Path.Combine(_generatedDirName, sourceRelativeDirectoryPath, filename);
-        //    var targetPath = Path.Combine(rootPath, relativePath);
-        //    Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
-        //    File.WriteAllText(targetPath, code);
-
-        //    return relativePath;
-        //}
+            return new ProjectFile(relativePath, ItemGroupLabel.VSCode, BuildActionType.None, true);
+        }
 
         #region misc around
 
@@ -182,7 +178,7 @@ namespace CodeGenEngine
             var forRemove = new List<XElement>();
 
             foreach (var itemgroup in csproj.Element(XmlName("Project")).Elements(XmlName("ItemGroup")))
-                forRemove.AddRange(itemgroup.Elements(XmlName("Compile")).Where(c => c.Attribute("Include").Value.StartsWith($"{_generatedDirName}\\")));
+                forRemove.AddRange(itemgroup.Elements(XmlName("Compile")).Where(c => c.Attribute("Include").Value.StartsWith($"{_generatedPath}\\")));
             foreach (var element in forRemove)
                 element.Remove();
             forRemove.Clear();
@@ -194,21 +190,76 @@ namespace CodeGenEngine
 
         private void RemovePreviouslyGeneratedFilesFromDrive()
         {
-            var generatedPath = Path.Combine(RootPath, _generatedDirName);
+            var generatedPath = Path.Combine(RootPath, _generatedPath);
             if (Directory.Exists(generatedPath))
                 Directory.Delete(generatedPath, true);
+            var assetsPath = Path.Combine(RootPath, _assetsPath);
+            if (Directory.Exists(assetsPath))
+                Directory.Delete(assetsPath, true);
         }
 
-        private void AddGeneratedFilesToProject(XDocument csproj, List<string> generatedFiles)
+        private bool AddGeneratedFilesToProject(XDocument csproj, List<ProjectFile> generatedFiles)
         {
-            var itemGroup = new XElement(XmlName("ItemGroup"));
-            foreach (var generatedFile in generatedFiles.Where(f => !string.IsNullOrWhiteSpace(f)))
+            bool projectChanged = false;
+            generatedFiles.RemoveAll(f => f.Equals(default(ProjectFile)));
+            var itemGroups = new Dictionary<ItemGroupLabel, XElement>();
+            var forRemove = new List<XElement>();
+            foreach (var itemgroup in csproj.Element(XmlName("Project")).Elements(XmlName("ItemGroup")))
             {
-                var compile = new XElement(XmlName("Compile"), new XAttribute("Include", generatedFile));
-                itemGroup.Add(compile);
+                var labelAtribute = itemgroup.Attribute("Label");
+                if (labelAtribute != null)
+                {
+                    ItemGroupLabel label;
+                    if (Enum.TryParse(labelAtribute.Value, out label))
+                    {
+                        itemGroups.Add(label, itemgroup);
+                        foreach (var entry in itemgroup.Elements())
+                        {
+                            BuildActionType action;
+                            if (Enum.TryParse(entry.Name.LocalName, out action))
+                            {
+                                var include = entry.Attribute("Include");
+                                if (include != null)
+                                {
+                                    var path = include.Value;
+                                    var copyToOutputDirectory = false;
+                                    var copyEntry = entry.Element(XmlName("CopyToOutputDirectory"));
+                                    if (copyEntry != null)
+                                        copyToOutputDirectory = copyEntry.Value == "Always" || copyEntry.Value == "PreserveNewest";
+                                    var projectFile = new ProjectFile(path, label, action, copyToOutputDirectory);
+                                    if (generatedFiles.RemoveAll(f => f.Equals(projectFile)) > 0)
+                                        continue;
+                                }
+                            }
+                            forRemove.Add(entry);
+                        }
+                    }
+                }
             }
-            if (itemGroup.HasElements)
-                csproj.Root.Add(itemGroup);
+
+            foreach (var node in forRemove)
+            {
+                node.Remove();
+                projectChanged = true;
+            }
+
+            foreach (var file in generatedFiles)
+            {
+                XElement itemGroup;
+                if (!itemGroups.TryGetValue(file.ItemGroup, out itemGroup))
+                {
+                    itemGroup = new XElement(XmlName("ItemGroup"), new XAttribute("Label", file.ItemGroup));
+                    csproj.Root.Add(itemGroup);
+                    itemGroups.Add(file.ItemGroup, itemGroup);
+                }
+                var action = new XElement(XmlName(file.BuildAction.ToString()), new XAttribute("Include", file.File));
+                if (file.CopyToOutputDirectory)
+                    action.Add(new XElement(XmlName("CopyToOutputDirectory"), "Always"));
+                itemGroup.Add(action);
+                projectChanged = true;
+            }
+
+            return projectChanged;
         }
 
         private XName XmlName(string name)

@@ -51,9 +51,6 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\Catotopia.Shared\Catotopia.Shared.csproj">
       <Project>{aac3281e-7729-4e39-8fbd-18778ee10af1}</Project>
       <Name>Catotopia.Shared</Name>
@@ -66,9 +63,17 @@
   <PropertyGroup>
     <PostBuildEvent></PostBuildEvent>
   </PropertyGroup>
-  <ItemGroup>
+  <ItemGroup Label="Generated">
     <Compile Include="Generated\Defs\MainDef.cs" />
     <Compile Include="Generated\Defs\SideADef.cs" />
     <Compile Include="Generated\Defs\SideBDef.cs" />
+  </ItemGroup>
+  <ItemGroup Label="VSCode">
+    <None Include="Assets\.vscode\settings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Include="Assets\json_schema.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
