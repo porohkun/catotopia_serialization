@@ -18,7 +18,7 @@ namespace Catotopia
         private static Resources _res = new Resources();
 
         private readonly string _root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets/");
-        private Dictionary<string, Def> _resources = new Dictionary<string, Def>();
+        private Dictionary<string, IDef> _resources = new Dictionary<string, IDef>();
         private Dictionary<string, Type> _types = new Dictionary<string, Type>();
 
         private Resources()
@@ -64,14 +64,14 @@ namespace Catotopia
             return (T)genericMethod.Invoke(this, parameters);
         }
 
-        public static T Get<T>(string path) where T : Def
+        public static T Get<T>(string path) where T :class, IDef
         {
             return _res.GetInternal<T>(path);
         }
 
-        private T GetInternal<T>(string path) where T : Def
+        private T GetInternal<T>(string path) where T : class, IDef
         {
-            Def result;
+            IDef result;
             if (_resources.TryGetValue(path, out result))
             {
                 if (result != null)
@@ -107,7 +107,7 @@ namespace Catotopia
                 type == typeof(short) ||
                 type == typeof(char))
                 return GetSimpleFrom<T>(token);
-            else if (typeof(Def).IsAssignableFrom(type))
+            else if (typeof(IDef).IsAssignableFrom(type))
                 return GetDefFrom<T>(token);
             else if (type.IsArray)
             {
@@ -125,12 +125,14 @@ namespace Catotopia
         {
             if (token.Type == JTokenType.String)
                 return InvokeGeneric<T>(nameof(GetInternal), token.Value<string>());
+            if (token.Type == JTokenType.Null)
+                return default(T);
 
-            var type = GetType(token["$type"].Value<string>());
+                var type = GetType(token["$type"].Value<string>());
             return InvokeGeneric<T>(nameof(GetStrongDefFrom), type, token);
         }
 
-        private T GetStrongDefFrom<T>(JToken token) where T : Def
+        private T GetStrongDefFrom<T>(JToken token) where T : class, IDef
         {
             var def = Activator.CreateInstance<T>();
             def.Fill(token, this as IResourcesContainer);

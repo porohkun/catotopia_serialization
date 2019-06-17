@@ -44,6 +44,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Defs\IDef.cs" />
     <Compile Include="Defs\Def.cs" />
     <Compile Include="IResourcesContainer.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

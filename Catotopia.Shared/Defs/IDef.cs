@@ -9,8 +9,8 @@ using System.Threading.Tasks;
 
 namespace Catotopia.Defs
 {
-    public abstract class Def : IDef
+    public interface IDef
     {
-        public virtual void Fill(JToken source, IResourcesContainer resources) { }
+        void Fill(JToken source, IResourcesContainer resources);
     }
 }
